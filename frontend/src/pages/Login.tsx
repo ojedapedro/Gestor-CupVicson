@@ -107,6 +107,12 @@ export function Login() {
         </form>
 
         <div className="mt-5 pt-4 border-t border-slate-200 text-center">
+          <p className="text-sm text-slate-600 mb-3">
+            ¿No tienes cuenta?{' '}
+            <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+              Regístrate aquí
+            </Link>
+          </p>
           <p className="text-xs text-slate-400">
             Sistema de gestión — VICSON SA — {new Date().toLocaleDateString('es-VE', { year: 'numeric', month: 'long' })}
           </p>
