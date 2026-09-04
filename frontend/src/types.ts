@@ -1,4 +1,3 @@
-import React from 'react';
 
 // ---------- Tipos base de Supabase ----------
 

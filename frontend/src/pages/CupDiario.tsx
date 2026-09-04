@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
+import { formatCurrency } from '../lib/api';
 import type { CupDiario, Contrato } from '../types';
 import { DataTable } from '../components/DataTable';
 import { FormField, SelectField, Button } from '../components/FormField';
@@ -107,7 +108,7 @@ export function CupDiario() {
 
   // Recalcular total_venta sumando todos los campos de venta
   const calcularTotalVenta = (f: Partial<CupDiario>) =>
-    Number(CAMPOS_VENTA.reduce((acc, k) => acc + (Number(f[k]) || 0), 0).toFixed(2));
+    Number(CAMPOS_VENTA.reduce<number>((acc, k) => acc + (Number((f as Record<string, unknown>)[k as string]) || 0), 0).toFixed(2));
 
   // Form handlers
   const resetForm = () => {

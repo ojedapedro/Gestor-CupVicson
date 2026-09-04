@@ -195,22 +195,25 @@ export function Refrigerios() {
                 )}
               </div>
             )},
-            { key: ' cantidad', header: 'Cantidad', align: 'right', render: (v) => (
+            { key: 'cantidad', header: 'Cantidad', align: 'right', render: (v) => (
               <span className="font-medium text-slate-800">{formatCurrency(v)}</span>
             )},
             { key: 'importe', header: 'Importe', align: 'right', render: (v) => (
               <span className="font-medium text-brand-700">{formatCurrency(v)}</span>
             )},
-            { key: '', header: 'Acciones', align: 'center', render: (_, row) => (
-              <div className="flex items-center justify-end gap-1">
-                <button onClick={(e) => { e.stopPropagation(); openForm(row); }} className="p-1 rounded text-slate-400 hover:text-brand-600 hover:bg-brand-50">
-                  <Package size={14} />
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }} className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            )},
+            { key: 'id', header: 'Acciones', align: 'center', render: (_, row) => {
+              const r = row as RefriDiario & { producto?: ProductoRefri };
+              return (
+                <div className="flex items-center justify-end gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); openForm(r); }} className="p-1 rounded text-slate-400 hover:text-brand-600 hover:bg-brand-50">
+                    <Package size={14} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            }},
           ]}
           loading={loading}
           emptyMessage="Sin registros"
