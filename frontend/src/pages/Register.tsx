@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export function Register() {
-  const { signUp, user, loading: authLoading } = useAuth();
+  const { signUp, user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [nombre, setNombre] = useState('');
@@ -57,7 +57,7 @@ export function Register() {
           <button
             onClick={() => {
               // Sign out so they can log in as a different user if needed
-              useAuth().signOut?.();
+              if (signOut) signOut();
               navigate('/login');
             }}
             className="inline-block px-4 py-2 bg-brand-50 text-brand-700 font-medium rounded-lg hover:bg-brand-100 transition-colors"
