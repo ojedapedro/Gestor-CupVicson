@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
+import { formatCurrency, estadoBadge } from '../lib/api';
 import { GuiaFact, GuiaDetalle, Cliente, Servicio, Sucursal } from '../types';
 import { DataTable } from '../components/DataTable';
 import { FormField, SelectField, Button } from '../components/FormField';
 import { StatCard } from '../components/StatCard';
+import { ErrorAlert } from '../components/ErrorAlert';
 import {
   Plus,
   FileText,
@@ -17,6 +19,7 @@ import { format } from 'date-fns';
 export function GuiasFact() {
   const [guias, setGuias] = useState<(GuiaFact & { clientes?: Pick<Cliente, 'nombre' | 'rif'> | null; sucursales?: Pick<Sucursal, 'nombre' | 'codigo'> | null })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [estadoFilter, setEstadoFilter] = useState<string>('');
 
@@ -34,6 +37,7 @@ export function GuiasFact() {
 
   const cargarGuias = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       let query = supabase
         .from('guias_fact')
@@ -51,9 +55,9 @@ export function GuiasFact() {
       const { data, error: err } = await query;
       if (err) throw err;
       setGuias(data ?? []);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
       setGuias([]);
+      setLoadError(e?.message ?? 'Error al cargar las guías de facturación.');
     } finally {
       setLoading(false);
     }
@@ -181,24 +185,24 @@ export function GuiasFact() {
       if (editingId) {
         result = await supabase.from('guias_fact').update(guiaData).eq('id', editingId).select().single();
         if (result.error) throw result.error;
-        // Eliminar detalles viejos y crear nuevos
+        // Eliminar detalles viejos y re-insertar en una sola llamada (batch)
         await supabase.from('guias_detalle').delete().eq('guia_id', editingId);
-        for (const det of detallesFinal) {
-          await supabase.from('guias_detalle').insert({
-            ...det,
-            guia_id: editingId,
-          });
+        if (detallesFinal.length > 0) {
+          const { error: detErr } = await supabase.from('guias_detalle').insert(
+            detallesFinal.map(det => ({ ...det, guia_id: editingId }))
+          );
+          if (detErr) throw detErr;
         }
       } else {
         result = await supabase.from('guias_fact').insert(guiaData).select().single();
         if (result.error) throw result.error;
         const guiaId = result.data?.id;
         if (!guiaId) throw new Error('No se pudo crear la guía');
-        for (const det of detallesFinal) {
-          await supabase.from('guias_detalle').insert({
-            ...det,
-            guia_id: guiaId,
-          });
+        if (detallesFinal.length > 0) {
+          const { error: detErr } = await supabase.from('guias_detalle').insert(
+            detallesFinal.map(det => ({ ...det, guia_id: guiaId }))
+          );
+          if (detErr) throw detErr;
         }
       }
 
@@ -228,11 +232,6 @@ export function GuiasFact() {
     } else {
       await cargarGuias();
     }
-  };
-
-  const fmt = (v: number | null | undefined) => {
-    if (v == null || v === 0) return '-';
-    return 'Bs. ' + Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2 });
   };
 
   const filtrados = guias.filter(g => {
@@ -293,6 +292,9 @@ export function GuiasFact() {
         <StatCard title="Facturadas" value={guias.filter(g => g.estado === 'facturada').length} variant="success" />
         <StatCard title="Pagadas" value={guias.filter(g => g.estado === 'pagada').length} />
       </div>
+
+      {/* Error de carga */}
+      {loadError && <ErrorAlert message={loadError} onClose={() => setLoadError('')} />}
 
       {/* Tabla */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
@@ -522,7 +524,7 @@ export function GuiasFact() {
                 {detalles.length > 0 && (
                   <div className="mt-2 flex justify-end">
                     <div className="text-sm font-medium text-slate-700 mr-4">
-                      Total: <span className="text-brand-600">{fmt(totalGuia)}</span>
+                      Total: <span className="text-brand-600">{formatCurrency(totalGuia)}</span>
                     </div>
                   </div>
                 )}

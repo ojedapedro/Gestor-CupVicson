@@ -1,0 +1,42 @@
+# ============================================================
+# Gestor CupVicson — .gitignore
+# ============================================================
+
+# Dependencias
+node_modules/
+frontend/node_modules/
+
+# Build de producción
+frontend/dist/
+frontend/.vite/
+
+# Variables de entorno (NUNCA subir al repo)
+.env
+frontend/.env
+scripts/**/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# TypeScript build info
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabase';
-
+import { useAuth } from '../context/AuthContext';
 import { DataTable } from '../components/DataTable';
 import { FormField, SelectField, Button } from '../components/FormField';
+import { ErrorAlert } from '../components/ErrorAlert';
+import { formatCurrency } from '../lib/api';
 import {
   Building2,
   Users,
@@ -14,7 +16,8 @@ import {
   Edit3,
   Trash2,
   X,
-  ChevronRight,
+  UserCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -39,9 +42,12 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
 ];
 
 export function AdminConfig() {
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>('empresas');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [data, setData] = useState<Record<string, any[]>>({});
+  const [sucursales, setSucursales] = useState<{ id: string; nombre: string }[]>([]);
   const [cargandoForm, setCargandoForm] = useState(false);
 
   // Form state
@@ -52,7 +58,9 @@ export function AdminConfig() {
   const [error, setError] = useState('');
 
   // Data loaders
-  const loadData = async (tab: TabId) => {
+  const loadData = useCallback(async (tab: TabId) => {
+    setLoading(true);
+    setLoadError('');
     try {
       const queries: Record<TabId, any> = {
         empresas: supabase.from('empresas').select('*').order('nombre'),
@@ -62,23 +70,34 @@ export function AdminConfig() {
         clientes: supabase.from('clientes').select('*').order('nombre'),
         productos: supabase.from('productos_refri').select('*').order('nombre'),
         proveedores: supabase.from('proveedores').select('*').order('nombre'),
-        usuarios: supabase.from('user_sucursal').select('*, auth.users(email)').order('created_at', { ascending: false }),
+        // Para usuarios: join con sucursales para mostrar el nombre
+        usuarios: supabase
+          .from('user_sucursal')
+          .select('*, sucursales(nombre)')
+          .order('created_at', { ascending: false }),
       };
       const { data: d, error: err } = await queries[tab];
       if (err) throw err;
-      setData((prev: Record<string, any[]>) => ({ ...prev, [tab]: d ?? [] }));
-    } catch (e) {
-      console.error(e);
-      setData((prev: Record<string, any[]>) => ({ ...prev, [tab]: [] }));
+      setData(prev => ({ ...prev, [tab]: d ?? [] }));
+    } catch (e: any) {
+      setLoadError(e?.message ?? `Error al cargar ${tab}.`);
+      setData(prev => ({ ...prev, [tab]: [] }));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Cargar sucursales para el select de usuarios
+  useEffect(() => {
+    supabase.from('sucursales').select('id, nombre').order('nombre').then(({ data: d }) => {
+      setSucursales(d ?? []);
+    });
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     loadData(activeTab);
-  }, [activeTab]);
+  }, [activeTab, loadData]);
 
   // Form handlers genéricos
   const resetForm = () => {
@@ -213,7 +232,7 @@ export function AdminConfig() {
           { key: 'nombre', header: 'Servicio', render: (v: any) => <span className="text-sm text-slate-700">{v ?? '-'}</span> },
           { key: 'categorias_servicio', header: 'Categoría', render: (_: any, row: any) => <span className="text-xs text-slate-500">{row.categorias_servicio?.nombre ?? '-'}</span> },
           { key: 'indicador', header: 'Ind.', render: (v: any) => <span className="text-xs font-mono text-slate-500">{v ?? '-'}</span> },
-          { key: 'precio_vigente', header: 'Precio', align: 'right', render: (v: any) => <span className="text-sm text-slate-700">{v ? 'Bs. ' + Number(v).toLocaleString() : '-'}</span> },
+          { key: 'precio_vigente', header: 'Precio', align: 'right', render: (v: any) => <span className="text-sm text-slate-700">{formatCurrency(v)}</span> },
           ...commonAcciones,
         ];
       case 'clientes':
@@ -230,7 +249,7 @@ export function AdminConfig() {
           { key: 'nombre', header: 'Producto', render: (v: any) => <span className="font-medium">{v ?? '-'}</span> },
           { key: 'codigo', header: 'Código', render: (v: any) => <span className="font-mono text-sm text-slate-600">{v ?? '-'}</span> },
           { key: 'categoria', header: 'Categoría', render: (v: any) => <span className="text-xs text-slate-500">{v ?? '-'}</span> },
-          { key: 'precio', header: 'Precio', align: 'right', render: (v: any) => <span className="text-sm text-slate-700">{v ? 'Bs. ' + Number(v).toLocaleString() : '-'}</span> },
+          { key: 'precio', header: 'Precio', align: 'right', render: (v: any) => <span className="text-sm text-slate-700">{formatCurrency(v)}</span> },
           { key: 'unidad', header: 'Unidad', render: (v: any) => <span className="text-xs text-slate-500">{v ?? '-'}</span> },
           ...commonAcciones,
         ];
@@ -244,20 +263,70 @@ export function AdminConfig() {
         ];
       case 'usuarios':
         return [
-          { key: 'auth.users', header: 'Usuario', render: (_: any, row: any) => (
-            <div>
-              <div className="font-medium text-slate-800 text-sm">{row['auth.users']?.email ?? '-'}</div>
-              <div className="text-xs text-slate-400">ID: {row.user_id?.slice(0, 8)}...</div>
-            </div>
-          )},
-          { key: 'sucursal_id', header: 'Sucursal', render: (v: any) => <span className="text-sm text-slate-600">{v ?? '-'}</span> },
-          { key: 'rol', header: 'Rol', render: (v: any) => (
-            <span className={`text-xs px-2 py-0.5 rounded-full ${v === 'admin' ? 'bg-red-100 text-red-700' : v === 'gerente' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-              {v}
-            </span>
-          )},
+          {
+            key: 'user_id',
+            header: 'Usuario',
+            render: (_: any, row: any) => (
+              <div>
+                <div className="font-medium text-slate-800 text-sm">
+                  {row.email ?? <span className="text-slate-400 italic text-xs">sin email (ver Supabase)</span>}
+                </div>
+                <div className="text-xs text-slate-400 font-mono">{row.user_id?.slice(0, 12)}…</div>
+              </div>
+            ),
+          },
+          {
+            key: 'sucursal_id',
+            header: 'Sucursal',
+            render: (_: any, row: any) => (
+              <span className="text-sm text-slate-700">
+                {row.sucursales?.nombre ?? row.sucursal_id ?? '-'}
+              </span>
+            ),
+          },
+          {
+            key: 'rol',
+            header: 'Rol',
+            render: (v: any) => {
+              const styles: Record<string, string> = {
+                admin: 'bg-red-100 text-red-700',
+                gerente: 'bg-blue-100 text-blue-700',
+                operador: 'bg-slate-100 text-slate-600',
+              };
+              return (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${styles[v] ?? 'bg-slate-100 text-slate-600'}`}>
+                  {v}
+                </span>
+              );
+            },
+          },
           { key: 'created_at', header: 'Desde', render: (v: any) => v ? format(new Date(v), 'dd/MM/yyyy') : '-' },
-          ...commonAcciones,
+          {
+            key: '',
+            header: 'Acciones',
+            align: 'center' as const,
+            render: (_: any, row: any) => (
+              <div className="flex items-center justify-end gap-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); openForm(row); }}
+                  className="p-1.5 rounded text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                  title="Editar rol/sucursal"
+                >
+                  <Edit3 size={14} />
+                </button>
+                {/* No mostrar delete del propio usuario logueado */}
+                {row.user_id !== currentUser?.id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(row.id); }}
+                    className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Eliminar acceso"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ),
+          },
         ];
       default:
         return [];
@@ -380,11 +449,52 @@ export function AdminConfig() {
           </>
         );
       case 'usuarios':
+        // Si NO es admin, no puede gestionar usuarios
+        if (currentUser?.rol !== 'admin') {
+          return (
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <ShieldAlert size={18} className="text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">Acceso restringido</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Solo los administradores pueden gestionar usuarios y roles.
+                </p>
+              </div>
+            </div>
+          );
+        }
         return (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-            Para gestionar usuarios, usa la consola de Supabase directamente:
-            la tabla <code>user_sucursal</code> mapea usuarios → sucursal + rol.
-          </div>
+          <>
+            <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <UserCheck size={16} className="mt-0.5 shrink-0" />
+              <p>
+                Para <strong>crear nuevos usuarios</strong>, usa el panel de Supabase →
+                Authentication → Users. Aquí puedes editar el <strong>rol</strong> y la
+                <strong> sucursal asignada</strong> de usuarios existentes.
+              </p>
+            </div>
+            <SelectField
+              label="Rol *"
+              name="rol"
+              options={[
+                { value: 'admin', label: '🛡 Admin — acceso total' },
+                { value: 'gerente', label: '👔 Gerente — su sucursal' },
+                { value: 'operador', label: '👤 Operador — solo lectura/inserción' },
+              ]}
+              value={form.rol ?? 'operador'}
+              onChange={v => handleChange('rol', v)}
+              required
+            />
+            <SelectField
+              label="Sucursal asignada *"
+              name="sucursal_id"
+              options={sucursales.map(s => ({ value: s.id, label: s.nombre }))}
+              value={form.sucursal_id ?? ''}
+              onChange={v => handleChange('sucursal_id', v)}
+              required={form.rol !== 'admin'}
+              placeholder="Seleccionar sucursal"
+            />
+          </>
         );
       default:
         return <div className="text-sm text-slate-400">Formulario no disponible</div>;
@@ -420,6 +530,9 @@ export function AdminConfig() {
           );
         })}
       </div>
+
+      {/* Error de carga */}
+      {loadError && <ErrorAlert message={loadError} onClose={() => setLoadError('')} />}
 
       {/* Data table */}
       {loading ? (
