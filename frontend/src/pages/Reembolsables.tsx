@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
+import { formatCurrency } from '../lib/api';
 import { Reembolsable, Proveedor } from '../types';
 import { DataTable } from '../components/DataTable';
 import { FormField, SelectField, Button } from '../components/FormField';
 import { StatCard } from '../components/StatCard';
+import { ErrorAlert } from '../components/ErrorAlert';
 import { Plus, Receipt, Search, Trash2, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 
 export function Reembolsables() {
   const [registros, setRegistros] = useState<(Reembolsable & { proveedor_nombre?: string; proveedor_rif?: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [mes, setMes] = useState(() => {
     const now = new Date();
@@ -28,10 +31,11 @@ export function Reembolsables() {
 
   const cargarDatos = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [anio, mesNum] = mes.split('-').map(Number);
       const inicio = `${anio}-${String(mesNum).padStart(2, '0')}-01`;
-      const fin = `${anio}-${String(mesNum + 1).padStart(2, '0')}-01`;
+      const fin = mesNum === 12 ? `${anio + 1}-01-01` : `${anio}-${String(mesNum + 1).padStart(2, '0')}-01`;
 
       const { data, error: err } = await supabase
         .from('reembolsables')
@@ -45,9 +49,9 @@ export function Reembolsables() {
 
       if (err) throw err;
       setRegistros(data ?? []);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
       setRegistros([]);
+      setLoadError(e?.message ?? 'Error al cargar los reembolsables.');
     } finally {
       setLoading(false);
     }
@@ -138,11 +142,6 @@ export function Reembolsables() {
   const totalIva = registros.reduce((a, r) => a + (Number(r.iva) || 0), 0);
   const totalCosto = registros.reduce((a, r) => a + (Number(r.costo_total) || 0), 0);
 
-  const fmt = (v: number | null | undefined) => {
-    if (v == null || v === 0) return '-';
-    return 'Bs. ' + Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2 });
-  };
-
   const filtrados = registros.filter(r => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -167,11 +166,15 @@ export function Reembolsables() {
             onChange={e => setMes(e.currentTarget.value)}
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
           >
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={`${new Date().getFullYear()}-${String(i + 1).padStart(2, '0')}`}>
-                {new Date(2024, i).toLocaleDateString('es-VE', { month: 'long' })} {new Date().getFullYear()}
-              </option>
-            ))}
+            {Array.from({ length: 12 }, (_, i) => {
+              const anio = new Date().getFullYear();
+              const m = String(i + 1).padStart(2, '0');
+              return (
+                <option key={`${anio}-${m}`} value={`${anio}-${m}`}>
+                  {new Date(anio, i).toLocaleDateString('es-VE', { month: 'long' })} {anio}
+                </option>
+              );
+            })}
           </select>
           <Button onClick={() => { resetForm(); openForm(); }} variant="primary">
             <Plus size={16} /> Nuevo
@@ -181,11 +184,14 @@ export function Reembolsables() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard title="Total Reembolsables" value={fmt(totalCosto)} icon={<DollarSign size={16} className="text-brand-600" />} />
-        <StatCard title="IVA Acumulado" value={fmt(totalIva)} icon={<Receipt size={16} />} />
-        <StatCard title="Total con IVA" value={fmt(totalGeneral)} variant="success" />
+        <StatCard title="Total Reembolsables" value={formatCurrency(totalCosto)} icon={<DollarSign size={16} className="text-brand-600" />} />
+        <StatCard title="IVA Acumulado" value={formatCurrency(totalIva)} icon={<Receipt size={16} />} />
+        <StatCard title="Total con IVA" value={formatCurrency(totalGeneral)} variant="success" />
         <StatCard title="Registros" value={registros.length} subtitle={`mes ${mes}`} />
       </div>
+
+      {/* Error de carga */}
+      {loadError && <ErrorAlert message={loadError} onClose={() => setLoadError('')} />}
 
       {/* Filtro */}
       <div className="flex items-center gap-3">
@@ -240,19 +246,19 @@ export function Reembolsables() {
               key: 'costo_total',
               header: 'Costo S/IVA',
               align: 'right',
-              render: (v) => <span className="text-slate-800 font-medium">{fmt(v)}</span>,
+              render: (v) => <span className="text-slate-800 font-medium">{formatCurrency(v)}</span>,
             },
             {
               key: 'iva',
               header: 'IVA %',
               align: 'right',
-              render: (v) => <span className="text-slate-600">{fmt(v)}</span>,
+              render: (v) => <span className="text-slate-600">{formatCurrency(v)}</span>,
             },
             {
               key: 'total_iva',
               header: 'Total',
               align: 'right',
-              render: (v) => <span className="font-semibold text-brand-700">{fmt(v)}</span>,
+              render: (v) => <span className="font-semibold text-brand-700">{formatCurrency(v)}</span>,
             },
             {
               key: '',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatCurrency } from '../lib/api';
 import { supabase } from '../supabase';
 import { RefriDiario, ProductoRefri, CupDiario } from '../types';
 import { DataTable } from '../components/DataTable';
@@ -128,10 +129,7 @@ export function Refrigerios() {
   const totalVendido = diarios.reduce((a, d) => a + (Number(d.cantidad) || 0), 0);
   const totalImporte = diarios.reduce((a, d) => a + (Number(d.importe) || 0), 0);
 
-  const fmt = (v: number | null | undefined) => {
-    if (v == null || v === 0) return '-';
-    return 'Bs. ' + Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2 });
-  };
+  // fmt removed
 
   const filtrados = diarios.filter(d => {
     if (!search) return true;
@@ -166,7 +164,7 @@ export function Refrigerios() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard title="Total Cantidad" value={totalVendido} icon={<Package size={16} className="text-brand-600" />} />
-        <StatCard title="Total Importe" value={fmt(totalImporte)} icon={<TrendingUp size={16} />} />
+        <StatCard title="Total Importe" value={formatCurrency(totalImporte)} icon={<TrendingUp size={16} />} />
         <StatCard title="Días" value={new Set(diarios.map(d => d.fecha)).size} />
         <StatCard title="Productos" value={productos.length} subtitle="activos" />
       </div>
@@ -198,10 +196,10 @@ export function Refrigerios() {
               </div>
             )},
             { key: ' cantidad', header: 'Cantidad', align: 'right', render: (v) => (
-              <span className="font-medium text-slate-800">{fmt(v)}</span>
+              <span className="font-medium text-slate-800">{formatCurrency(v)}</span>
             )},
             { key: 'importe', header: 'Importe', align: 'right', render: (v) => (
-              <span className="font-medium text-brand-700">{fmt(v)}</span>
+              <span className="font-medium text-brand-700">{formatCurrency(v)}</span>
             )},
             { key: '', header: 'Acciones', align: 'center', render: (_, row) => (
               <div className="flex items-center justify-end gap-1">

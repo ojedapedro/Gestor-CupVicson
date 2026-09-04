@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { StatCard } from '../components/StatCard';
 import { DataTable } from '../components/DataTable';
+import { ErrorAlert } from '../components/ErrorAlert';
 import { CupDiario } from '../types';
 import {
   TrendingUp,
@@ -23,9 +24,21 @@ import {
   Bar,
 } from 'recharts';
 
+function getMesOptions(): { value: string; label: string }[] {
+  const anio = new Date().getFullYear();
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = String(i + 1).padStart(2, '0');
+    return {
+      value: `${anio}-${m}`,
+      label: `${new Date(anio, i).toLocaleDateString('es-VE', { month: 'long' })} ${anio}`,
+    };
+  });
+}
+
 export function Dashboard() {
   const [cups, setCups] = useState<CupDiario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [mes, setMes] = useState(() => {
     const now = new Date();
     return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -38,26 +51,25 @@ export function Dashboard() {
 
   const cargarDatos = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [anio, mesNum] = mes.split('-').map(Number);
+      const nextMonth = mesNum === 12
+        ? `${anio + 1}-01-01`
+        : `${anio}-${String(mesNum + 1).padStart(2, '0')}-01`;
 
-      // Leer cup_diario del mes
       const { data: cupsData, error: cupsErr } = await supabase
         .from('cup_diario')
         .select('*')
         .gte('fecha', `${anio}-${String(mesNum).padStart(2, '0')}-01`)
-        .lt('fecha', `${anio}-${String(mesNum + 1).padStart(2, '0')}-01`)
+        .lt('fecha', nextMonth)
         .order('fecha', { ascending: true });
 
-      if (cupsErr) {
-        console.error('Error al cargar CUP:', cupsErr);
-        setCups([]);
-      } else {
-        setCups(cupsData ?? []);
-      }
-    } catch (err) {
-      console.error(err);
+      if (cupsErr) throw cupsErr;
+      setCups(cupsData ?? []);
+    } catch (e: any) {
       setCups([]);
+      setLoadError(e?.message ?? 'Error al cargar datos del Dashboard.');
     } finally {
       setLoading(false);
     }
@@ -97,11 +109,7 @@ export function Dashboard() {
     { nombre: 'Otros', valor: cups.reduce((a, c) => a + (c.otros ?? 0), 0) },
   ].filter(d => d.valor > 0);
 
-  const formatoMoneda = (v: number) => {
-    if (v >= 1_000_000) return 'Bs. ' + (v / 1_000_000).toFixed(2) + 'M';
-    if (v >= 1_000) return 'Bs. ' + (v / 1_000).toFixed(1) + 'K';
-    return 'Bs. ' + v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const fmt = (v: number | null | undefined) => formatCurrency(v);
 
   const columns: Array<{ key: string; header: string; align?: 'left'|'right'|'center'; sortable?: boolean; render: (v: any, row: any) => React.ReactNode }> = [
     { key: 'fecha', header: 'Fecha', render: (_: any, row: any) => (
@@ -112,26 +120,31 @@ export function Dashboard() {
       </div>
     )},
     { key: 'total_venta', header: 'Venta Total', align: 'right', render: (v: any) => (
-      <span className="font-semibold text-slate-800">{typeof v === 'number' ? formatoMoneda(v) : '-'}</span>
+      <span className="font-semibold text-slate-800">{typeof v === 'number' ? fmt(v) : '-'}</span>
     )},
     { key: 'costo_insumos', header: 'Insumos', align: 'right', render: (v: any) => (
-      <span className="text-slate-600">{typeof v === 'number' ? formatoMoneda(v) : '-'}</span>
+      <span className="text-slate-600">{typeof v === 'number' ? fmt(v) : '-'}</span>
     )},
     { key: 'desechables', header: 'Desech/Limp', align: 'right', render: (v: any) => (
-      <span className="text-slate-600">{typeof v === 'number' ? formatoMoneda(v) : '-'}</span>
+      <span className="text-slate-600">{typeof v === 'number' ? fmt(v) : '-'}</span>
     )},
     { key: 'costo_cup', header: 'Costo CUP', align: 'right', render: (v: any) => (
-      <span className="text-slate-600">{typeof v === 'number' ? formatoMoneda(v) : '-'}</span>
+      <span className="text-slate-600">{typeof v === 'number' ? fmt(v) : '-'}</span>
     )},
     { key: 'costo_personal', header: 'Personal', align: 'right', render: (v: any) => (
-      <span className="text-slate-600">{typeof v === 'number' ? formatoMoneda(v) : '-'}</span>
+      <span className="text-slate-600">{typeof v === 'number' ? fmt(v) : '-'}</span>
     )},
     { key: 'total_venta', header: 'Margen', align: 'right', sortable: true, render: (_: any, row: any) => {
       const v = row.total_venta ?? 0;
       const ins = (row.costo_insumos ?? 0) + (row.desechables ?? 0) + (row.costo_personal ?? 0);
       const m = v - ins;
-      const color = m >= 0 ? 'text-emerald-600' : 'text-red-600';
-      return <span className={`font-medium ${color}`}>{formatoMoneda(m)}</span>;
+      return (
+        <div>
+          <div className={`font-medium ${m < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {fmt(m)}
+          </div>
+        </div>
+      );
     }},
   ];
 
@@ -153,43 +166,40 @@ export function Dashboard() {
           className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-white
                      focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
         >
-          {Array.from({ length: 12 }, (_, i) => {
-            const m = String(i + 1).padStart(2, '0');
-            return (
-              <option key={m} value={`${new Date().getFullYear()}-${m}`}>
-                {new Date(2024, i).toLocaleDateString('es-VE', { month: 'long' })} 2024
-              </option>
-            );
-          })}
+          {getMesOptions().map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
         </select>
       </div>
+
+      {loadError && <ErrorAlert message={loadError} onClose={() => setLoadError('')} />}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Ventas Totales"
-          value={formatoMoneda(totalVentas)}
+          value={fmt(totalVentas)}
           subtitle={`${diasConDatos} días reportados`}
           icon={<DollarSign size={20} />}
           variant="success"
         />
         <StatCard
           title="Costo Insumos"
-          value={formatoMoneda(totalInsumos + totalDesechables)}
+          value={fmt(totalInsumos + totalDesechables)}
           subtitle={`${costoPct.toFixed(1)}% sobre ventas`}
           icon={<Percent size={20} />}
           variant={costoPct > 60 ? 'danger' : costoPct > 40 ? 'warning' : 'default'}
         />
         <StatCard
           title="Margen Neto"
-          value={formatoMoneda(margen)}
+          value={fmt(margen)}
           subtitle={`Ventas - Insumos - Personal`}
           icon={margen >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
           variant={margen >= 0 ? 'success' : 'danger'}
         />
         <StatCard
           title="Promedio Venta/Día"
-          value={formatoMoneda(diasConDatos > 0 ? totalVentas / diasConDatos : 0)}
+          value={fmt(diasConDatos > 0 ? totalVentas / diasConDatos : 0)}
           subtitle="Promedio diario"
           icon={<TrendingUp size={20} className="text-brand-600" />}
         />
@@ -213,7 +223,7 @@ export function Dashboard() {
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => (Number(v) / 1000).toFixed(0) + 'K'} />
               <Tooltip
                 contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0' }}
-                formatter={(value: number) => ['Bs.', formatoMoneda(value)]}
+                formatter={(value: number) => ['Bs.', fmt(value)]}
                 labelFormatter={(label) => {
                   const d = new Date(label);
                   return d.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -234,11 +244,11 @@ export function Dashboard() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={servicioData} layout="vertical" margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => Number(v) >= 1000 ? (v / 1000).toFixed(0) + 'K' : v} />
+              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(value) => formatCurrency(value)} />
               <YAxis dataKey="nombre" type="category" width={80} tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ borderRadius: '6px', border: '1px solid #e2e8f0' }}
-                formatter={(value: number) => ['Bs.', formatoMoneda(value)]}
+                formatter={(value: number) => ['Bs.', fmt(value)]}
               />
               <Bar dataKey="valor" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -255,9 +265,8 @@ export function Dashboard() {
           loading={loading}
           emptyMessage="Sin datos para este mes"
           searchKeys={['dia_semana']}
-          onRowClick={(row) => {
+          onRowClick={(_row) => {
             // Navegar al detalle del día (se puede implementar después)
-            console.log('Ver detalle:', row.fecha);
           }}
         />
       </div>
