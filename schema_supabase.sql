@@ -913,12 +913,30 @@ ALTER TABLE traspasos_emitidos ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS user_sucursal (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
-  sucursal_id     UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
-  rol             TEXT NOT NULL CHECK (rol IN ('admin','gerente','operador')),
+  sucursal_id     UUID REFERENCES sucursales(id) ON DELETE CASCADE,
+  rol             TEXT NOT NULL CHECK (rol IN ('admin','gerente','operador','pendiente')),
   created_at      TIMESTAMPTZ DEFAULT now()
 );
 
 ALTER TABLE user_sucursal ENABLE ROW LEVEL SECURITY;
+
+-- Función y trigger para crear user_sucursal cuando un usuario se registra
+CREATE OR REPLACE FUNCTION public.handle_new_user() 
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.user_sucursal (user_id, rol, sucursal_id)
+  VALUES (new.id, 'pendiente', NULL);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO anon;
 
 -- Función helper: obtener el rol y sucursal_id del usuario autenticado
 CREATE OR REPLACE FUNCTION get_user_context()

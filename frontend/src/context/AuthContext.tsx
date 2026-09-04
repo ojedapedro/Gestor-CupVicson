@@ -6,7 +6,7 @@ interface AuthState {
   user: {
     id: string;
     email: string;
-    rol: 'admin' | 'gerente' | 'operador';
+    rol: 'admin' | 'gerente' | 'operador' | 'pendiente';
     sucursal_id?: string;
   } | null;
   loading: boolean;
@@ -15,7 +15,7 @@ interface AuthState {
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error?: Error }>;
   signOut: () => Promise<void>;
-  signUp: (email: string, password: string, nombre: string, sucursal_id?: string) => Promise<{ error?: Error }>;
+  signUp: (email: string, password: string, nombre: string) => Promise<{ error?: Error }>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: {
         id: session.user.id,
         email: session.user.email ?? '',
-        rol: (usData?.rol ?? 'operador') as 'admin' | 'gerente' | 'operador',
+        rol: (usData?.rol ?? 'pendiente') as 'admin' | 'gerente' | 'operador' | 'pendiente',
         sucursal_id: usData?.sucursal_id ?? undefined,
       },
       loading: false,
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuth({ user: null, loading: false });
   };
 
-  const signUp = async (email: string, password: string, nombre: string, sucursal_id?: string) => {
+  const signUp = async (email: string, password: string, nombre: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -85,15 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error) return { error };
-
-    if (sucursal_id) {
-      const { error: usErr } = await supabase.from('user_sucursal').insert({
-        user_id: (await supabase.auth.getUser()).data.user?.id ?? '',
-        sucursal_id,
-        rol: 'operador',
-      } satisfies Partial<UserSucursal>);
-      if (usErr) console.warn('Error al crear user_sucursal:', usErr);
-    }
 
     return {};
   };

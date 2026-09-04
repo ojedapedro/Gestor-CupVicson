@@ -352,8 +352,8 @@ export interface NominaCambio extends DbRow {
 
 export interface UserSucursal extends DbRow {
   user_id: string;
-  sucursal_id: string;
-  rol: 'admin' | 'gerente' | 'operador';
+  sucursal_id: string | null;
+  rol: 'admin' | 'gerente' | 'operador' | 'pendiente';
   created_at: string;
 }
 

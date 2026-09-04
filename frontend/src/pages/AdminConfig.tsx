@@ -292,6 +292,7 @@ export function AdminConfig() {
                 admin: 'bg-red-100 text-red-700',
                 gerente: 'bg-blue-100 text-blue-700',
                 operador: 'bg-slate-100 text-slate-600',
+                pendiente: 'bg-amber-100 text-amber-700 animate-pulse',
               };
               return (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${styles[v] ?? 'bg-slate-100 text-slate-600'}`}>
@@ -468,9 +469,8 @@ export function AdminConfig() {
             <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
               <UserCheck size={16} className="mt-0.5 shrink-0" />
               <p>
-                Para <strong>crear nuevos usuarios</strong>, usa el panel de Supabase →
-                Authentication → Users. Aquí puedes editar el <strong>rol</strong> y la
-                <strong> sucursal asignada</strong> de usuarios existentes.
+                Los usuarios pueden crear su cuenta en la página de <strong>Registro</strong> (<code>/register</code>).
+                Aparecerán aquí con rol <strong>"pendiente"</strong>. Edítalos para asignarles un rol y una sucursal para darles acceso.
               </p>
             </div>
             <SelectField
@@ -480,6 +480,7 @@ export function AdminConfig() {
                 { value: 'admin', label: '🛡 Admin — acceso total' },
                 { value: 'gerente', label: '👔 Gerente — su sucursal' },
                 { value: 'operador', label: '👤 Operador — solo lectura/inserción' },
+                { value: 'pendiente', label: '⏳ Pendiente — sin acceso' },
               ]}
               value={form.rol ?? 'operador'}
               onChange={v => handleChange('rol', v)}
